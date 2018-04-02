@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+
+import sys
+import re
+import json
+
+TP_TASKS  = 0
+TP_ISRS   = 1
+TP_QUEUES = 3
+TP_GE     = 7 # generic events
+
+
+def show_tasks_info(obj_dict):
+  for s_id in obj_dict[TP_TASKS]['items'].keys():
+    item = obj_dict[TP_TASKS]['items'][s_id]
+    print("%s, %d calls, %.2f ms used, %.4f ms avg" %
+      (item['name'], len(item['time']), item['time_used'], item['time_avg']))
+
+def show_generic_events_info(obj_dict):
+  for s_id in obj_dict[TP_GE]['items'].keys():
+    item = obj_dict[TP_GE]['items'][s_id]
+    time_used = item['time'][-1] - item['time'][0]
+    time_avg = time_used / len(item['time']) * 1e-6
+    time_used *= 1e-6
+    print("%s, %d calls, %.2f ms used, %.4f ms avg" %
+      (item['name'], len(item['time']), time_used, time_avg))
+
+def calc_summary(obj_dict):
+  for s_id in obj_dict[TP_TASKS]['items'].keys():
+    item = obj_dict[TP_TASKS]['items'][s_id]
+    time_diff = 0
+    for time_item in item['time']:
+      if time_item['sta'] and time_item['sto']:
+        time_item['diff'] = time_item['sto'] - time_item['sta']
+        time_diff += time_item['sto'] - time_item['sta']
+      else:
+        pass
+    time_avg = time_diff / len(item['time'])
+    item['time_used'] = time_diff * 1e-6
+    item['time_avg']  = time_avg  * 1e-6
+
+def add_occ_time(obj_dict, s_type, s_id, s_time):
+  if s_type == TP_GE:
+    item = obj_dict[TP_GE]['items'].get(s_id)
+    assert item is not None, "Assert error: there is no entry with id=%d !" % s_id
+    item['time'].append(s_time)
+
+def add_sta_time(obj_dict, s_type, s_id, s_time):
+  if s_type == TP_TASKS:
+    item = obj_dict[TP_TASKS]['items'].get(s_id)
+    assert item is not None, "Assert error: there is no entry with id=%d !" % s_id
+    t = { 'sta' : s_time }
+    item['time'].append(t)
+
+def add_sto_time(obj_dict, s_type, s_id, s_time):
+  if s_type == TP_TASKS:
+    item = obj_dict[TP_TASKS]['items'].get(s_id)
+    assert item is not None, "Assert error: there is no entry with id=%d !" % s_id
+    t = item['time'][-1]
+    assert len(t.keys()) == 1, "Assert error: len(t.keys()) = %d" % len(t.keys())
+    t['sto'] = s_time
+
+def add_entry(obj_dict, s_type, s_id, s_name):
+  if s_type == TP_TASKS:
+    assert obj_dict[TP_TASKS]['items'].get(s_id) is None, "Assert error: the entry with id=%d is already existing!" % s_id
+    item = {
+        'name' : s_name,
+        'time' : [],  # sta, sto
+    }
+    obj_dict[TP_TASKS]['items'][s_id] = item
+  elif s_type == TP_GE:
+    assert obj_dict[TP_GE]['items'].get(s_id) is None, "Assert error: the entry with id=%d is already existing!" % s_id
+    item = {
+        'name' : s_name,
+        'time' : [], #
+    }
+    obj_dict[TP_GE]['items'][s_id] = item
+
+
+def handle_line(obj_dict, line_val, line_num):
+  if line_val.startswith('NAM'):
+    ss = line_val.split()
+    s_type = int(ss[1])
+    s_id   = int(ss[2])
+    s_name = ss[3][ ss[3].rfind(']')+1 :]
+    add_entry(obj_dict, s_type, s_id, s_name)
+  elif line_val.startswith('STA'):
+    ss = line_val.split()
+    s_type = int(ss[1])
+    s_id   = int(ss[2])
+    s_time = int(ss[3])
+    add_sta_time(obj_dict, s_type, s_id, s_time)
+  elif line_val.startswith('STO'):
+    ss = line_val.split()
+    s_type = int(ss[1])
+    s_id   = int(ss[2])
+    s_time = int(ss[3])
+    add_sto_time(obj_dict, s_type, s_id, s_time)
+  elif line_val.startswith('OCC'):
+    ss = line_val.split()
+    s_type = int(ss[1])
+    s_id   = int(ss[2])
+    s_time = int(ss[3])
+    add_occ_time(obj_dict, s_type, s_id, s_time)
+
+
+def main():
+
+  _obj = {
+    TP_TASKS  : {
+        'type' : 0,
+        'dsc'  : "Task Start",
+        'items': {},
+    },
+    TP_ISRS   : {
+        'type' : 1,
+        'dsc'  : "Interrupt Service Routine Start",
+        'items': {},
+    },
+    TP_QUEUES : {
+        'type' : 3,
+        'dsc'  : "Queue Send/Write",
+        'items': {},
+    },
+    TP_GE : {
+        'type' : 7,
+        'dsc'  : "Generic Event",
+        'items': {},
+    },
+  }
+
+  if len(sys.argv) == 2:
+    line_num = 0
+    filename = sys.argv[1]
+    for line_val in open(filename, 'r'):
+      line_num += 1
+      handle_line(_obj, line_val, line_num)
+
+    calc_summary(_obj)
+    # print(json.dumps(_obj, indent=4))
+    show_tasks_info(_obj)
+    print("")
+    show_generic_events_info(_obj)
+  else:
+    sys.stderr.write("Usage: %s <tdi-file>\n" % sys.argv[0])
+
+
+if __name__ == "__main__":
+   main()
