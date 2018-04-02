@@ -842,7 +842,7 @@ extern "C" int sendmmsg(int sockfd, struct mmsghdr* msgvec, unsigned int vlen,
   return ret;
 }
 
-#if defined(HAVE_REFSW_NEXUS_CONFIG_H) || defined(__i386) || defined(__arm__) || defined(__x86_64__)
+#if defined(HAVE_REFSW_NEXUS_CONFIG_H) || defined(__i386) || defined(__arm__)
 #define USE_CONST
 #else
 #define USE_CONST const
@@ -1448,7 +1448,7 @@ void* operator new(std::size_t n) throw(std::bad_alloc)
 #endif
 
 #if 1
-void* operator new[](unsigned int i) {
+void* operator new[](size_t i) {
   save_ra();
 
   // use a local copy so as to not incurr the tditrace from malloc
@@ -1474,7 +1474,7 @@ void* operator new[](unsigned int i) {
 
 //_Znwj
 #if 1
-void* operator new(unsigned int i) {
+void* operator new(size_t i) {
   save_ra();
 
   static void* (*___malloc)(size_t) = NULL;
